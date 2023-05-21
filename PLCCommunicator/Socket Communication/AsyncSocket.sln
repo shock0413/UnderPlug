@@ -1,0 +1,32 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AsyncSocket", "AsyncSocket\AsyncSocket.csproj", "{FBEF0024-C416-41D6-8D39-103EE7D094DC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AsyncSocketClientApp", "AsyncSocketSampleApp\AsyncSocketClientApp.csproj", "{49CCD53E-49CE-4B04-B683-9AD04145D199}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AsyncSocketServerApp", "AsyncSocketServerApp\AsyncSocketServerApp.csproj", "{AF0F33A1-1B4D-449D-B37C-F23F4500A84C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FBEF0024-C416-41D6-8D39-103EE7D094DC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FBEF0024-C416-41D6-8D39-103EE7D094DC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FBEF0024-C416-41D6-8D39-103EE7D094DC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FBEF0024-C416-41D6-8D39-103EE7D094DC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{49CCD53E-49CE-4B04-B683-9AD04145D199}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{49CCD53E-49CE-4B04-B683-9AD04145D199}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{49CCD53E-49CE-4B04-B683-9AD04145D199}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{49CCD53E-49CE-4B04-B683-9AD04145D199}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AF0F33A1-1B4D-449D-B37C-F23F4500A84C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AF0F33A1-1B4D-449D-B37C-F23F4500A84C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AF0F33A1-1B4D-449D-B37C-F23F4500A84C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AF0F33A1-1B4D-449D-B37C-F23F4500A84C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

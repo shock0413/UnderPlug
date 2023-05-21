@@ -1,0 +1,72 @@
+﻿<UserControl x:Class="Inspection.DisplayPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:Inspection"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+        </Grid.ColumnDefinitions>
+
+        <Grid.RowDefinitions>
+            <RowDefinition/>
+            <RowDefinition/>
+            <RowDefinition/>
+            <RowDefinition/>
+            <RowDefinition/>
+            <RowDefinition/>
+            <RowDefinition/>
+            <RowDefinition/>
+            <RowDefinition/>
+            <RowDefinition/>
+            <RowDefinition/>
+        </Grid.RowDefinitions>
+
+        <Rectangle Grid.Row="2" Grid.ColumnSpan="17" Grid.Column="1" Grid.RowSpan="8" Fill="White"/>
+        <Grid Grid.Row="2" Grid.Column="3">
+            <Ellipse Fill="{Binding Point1Brush}" Stroke="Black"></Ellipse>
+            <TextBlock Text="1" TextAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+
+        <Grid Grid.Row="2" Grid.Column="7">
+            <Ellipse Fill="{Binding Point2Brush}" Stroke="Black"></Ellipse>
+            <TextBlock Text="2" TextAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+
+        <Grid Grid.Row="2" Grid.Column="11">
+            <Ellipse  Fill="{Binding Point3Brush}" Stroke="Black"></Ellipse>
+            <TextBlock Text="3" TextAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+
+        <Grid Grid.Row="2" Grid.Column="15">
+            <Ellipse  Fill="{Binding Point4Brush}" Stroke="Black"></Ellipse>
+            <TextBlock Text="4" TextAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+
+        <StackPanel Grid.ColumnSpan="100" Grid.RowSpan="100" Grid.Row="2" VerticalAlignment="Center" Orientation="Vertical">
+            <TextBlock Text="차량 하부" TextAlignment="Center" VerticalAlignment="Center" FontSize="30"/>
+            <TextBlock Text="(플러그 장착 여부)" TextAlignment="Center" VerticalAlignment="Center" FontSize="30"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

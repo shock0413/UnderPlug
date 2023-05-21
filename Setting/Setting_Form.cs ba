@@ -1,0 +1,1124 @@
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Windows.Forms;
+
+using Cognex.VisionPro;
+using Cognex.VisionPro.CalibFix;
+using Hansero.VisionLib.VisionPro;
+using Utilities;
+
+namespace Setting
+{
+    public partial class Setting_Form : Form
+    {
+        // 패턴검사 툴
+        // 메인 패턴
+        private PMAlgin m_PMAlgin = new PMAlgin();
+        // 패턴 확인용 패턴
+        private PMAlgin m_PMAlginLeft = new PMAlgin();
+
+        private PMAlgin m_PMAlginRight = new PMAlgin();
+        // 서클찾기
+        //private FindCircle 
+
+        // 검사정보(INI 파일)
+        private IniFile m_Config = new IniFile(Application.StartupPath + "\\Config.ini");
+
+        private enum CURSTATE { ADD_PATTERN, MODIFY_RANGE, MODIFY_CIRCLE }
+
+        CURSTATE m_CurState = CURSTATE.MODIFY_RANGE;
+        private string m_CheckPosition;
+
+        public Setting_Form()
+        {
+            InitializeComponent();
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            Init_System();
+        }
+
+        private void Init_System()
+        {           
+
+            // 콤포넌트 초기화
+            panel_Confirm.Visible = false;
+
+            // 기종 정보 로드
+            cb_kind.Items.Clear();
+            foreach (KeyValuePair<string, string> model in m_Config.GetSectionValuesAsList("MODEL"))
+            {
+                cb_kind.Items.Add(model.Value);
+            }
+
+         
+            // 방향 정보 로드
+            cb_direction.Items.Clear();
+            foreach (KeyValuePair<string, string> model in m_Config.GetSectionValuesAsList("Direction"))
+            {
+                cb_direction.Items.Add(model.Value);
+            }
+
+            if (cb_kind.Items.Count > 0)
+                cb_kind.SelectedIndex = 0;
+            if (cb_direction.Items.Count > 0)
+                cb_direction.SelectedIndex = 0;
+
+            //// 합격점수 로드
+            numericUpDown1.Value = m_Config.GetInt32("Pattern", "Score", 60);
+
+            //// 패턴 로드
+            m_PMAlgin.LoadTool(Application.StartupPath + "\\Tools\\" + cb_kind.Text + cb_direction.Text + "Tool.vpp");
+            m_PMAlgin.Load_Pattern(Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text, cb_Model);
+
+            //// 패턴 로드
+            m_PMAlginLeft.LoadTool(Application.StartupPath + "\\Tools\\" + cb_kind.Text + cb_direction.Text + "LeftTool.vpp");
+            m_PMAlginLeft.Load_Pattern(Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text + "\\Left", comboBox1);
+
+            //// 패턴 로드
+            m_PMAlginRight.LoadTool(Application.StartupPath + "\\Tools\\" + cb_kind.Text + cb_direction.Text + "RightTool.vpp");
+            m_PMAlginRight.Load_Pattern(Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text + "\\Right", comboBox1);
+
+            m_CheckPosition = comboBox2.Text = "LEFT";
+
+            //// 합격점수 로드
+            numericUpDown2.Value = m_Config.GetInt32("Pattern", "Left Score", 60);
+
+            //// 마스터값 로드
+            tb_MasterX.Text = m_Config.GetString("Master", cb_kind.Text + cb_direction.Text + "X", "");
+            tb_MasterY.Text = m_Config.GetString("Master", cb_kind.Text + cb_direction.Text + "Y", "");
+            tb_MasterT.Text = m_Config.GetString("Master", cb_kind.Text + cb_direction.Text + "Angle", "");
+
+            //// 원 찾기
+            nud_NumCalipers.Value = (decimal)m_Config.GetInt32("Circle" + cb_direction.Text, "NumCalipers", 10);
+            nud_NumIgnores.Value = (decimal)m_Config.GetInt32("Circle" + cb_direction.Text, "NumIgnores", 5);
+
+            nud_SearchLength.Value = (decimal)m_Config.GetInt32("Circle" + cb_direction.Text, "CaliperSearchLength", 20);
+            nud_ProjectionLength.Value = (decimal)m_Config.GetInt32("Circle" + cb_direction.Text, "CaliperProjectionLength", 10);
+
+            cb_SearchDirection.Text = m_Config.GetString("Circle" + cb_direction.Text, "Direction", "Inward");
+
+            cb_EdgeMode.Text = m_Config.GetString("Circle" + cb_direction.Text, "Polarity", "LightToDark");
+
+            nud_NumThreshold.Value = (decimal)m_Config.GetInt32("Circle" + cb_direction.Text, "ContrastThreshold", 40);
+
+        }
+
+        private void btn_ModelDel_Click(object sender, EventArgs e)
+        {
+            if (MessageBox.Show("Delete Model", "Guidence Vision", MessageBoxButtons.YesNo) == DialogResult.No)
+            {
+                return;
+            }
+
+            // 패턴 파일 삭제
+            string tmpPath = Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text + "\\";
+            System.IO.File.Delete(tmpPath + cb_Model.Text + ".hsr");
+
+            //콤보박스 텍스트 지우고...
+            cb_Model.Text = "";
+
+            // 경로 지정 후...
+            string[] files = System.IO.Directory.GetFiles(tmpPath);
+
+            //for문 돌려서 i랑 파일이름이랑 같으면 계속 그렇지 않으면  
+            for (int i = 0; i < files.Length; i++)
+            {
+                string name = files[i];
+
+                if (int.Parse(name.Substring(name.Length - 7, 3)) == i)
+                {
+                    continue;
+                }
+                else
+                {
+                    //먼저 name을 i이름으로 파일복사하고 
+                    System.IO.File.Copy(name, tmpPath + string.Format("{0:000}.hsr", i));
+                    //기존name을 삭제한다.
+                    System.IO.File.Delete(name);
+                }
+            }
+
+            //다 끝나면 Master의 패턴을 다시 로드한다.
+            m_PMAlgin.Load_Pattern(Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text, cb_Model);
+
+            //모델화면 지우기
+            cogDisplay2.Image = null;
+        }
+
+        // 검사영역 설정
+        private void btn_InspectionRange_Click(object sender, EventArgs e)
+        {
+            Console.WriteLine("Modify Inspection Range");
+
+            if (cogDisplay1.Image == null)
+            {
+                MessageBox.Show("Not Loaded Image", "Guidence Vision", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            cogDisplay1.InteractiveGraphics.Clear();
+            cogDisplay1.StaticGraphics.Clear();
+
+            // 현재 수정 모드
+            m_CurState = CURSTATE.MODIFY_RANGE;
+
+            
+            // 2012.11.01 김기택
+            m_CheckPosition = "";
+
+            // 검사영역 표시
+            m_PMAlgin.DisplaySearchArea(cogDisplay1, true);
+
+            // 저장 버튼 활성화
+            panel_Confirm.Visible = true;
+        }
+
+        private void btn_ModelAdd_Click(object sender, EventArgs e)
+        {
+            Console.WriteLine("Add Model");
+
+            if (cogDisplay1.Image == null)
+            {
+                MessageBox.Show("Not Loaded Image", "Guidence Vision", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }           
+
+            cogDisplay1.InteractiveGraphics.Clear();
+            cogDisplay1.StaticGraphics.Clear();
+
+            // 현재 수정 모드
+            m_CurState = CURSTATE.ADD_PATTERN;
+
+            // 검사영역 표시
+            m_PMAlgin.Display_PatternArea(cogDisplay1);
+
+            // 저장 버튼 활성화
+            panel_Confirm.Visible = true;
+
+            m_CheckPosition = "";
+        }
+
+
+
+        private void btn_Save_Click(object sender, EventArgs e)
+        {
+            if (m_CurState == CURSTATE.MODIFY_RANGE)
+            {
+                string tmp_Path = Application.StartupPath + "\\Tools\\";
+                if (!System.IO.Directory.Exists(tmp_Path))
+                    System.IO.Directory.CreateDirectory(tmp_Path);
+
+                m_PMAlgin.Angle = 0;
+                m_PMAlgin.Zoom = 0;
+                m_PMAlgin.OKScore = (double)numericUpDown1.Value / 100.0;
+                m_PMAlginLeft.Angle = 3;
+                m_PMAlginLeft.Zoom = 0;
+                m_PMAlginLeft.OKScore = (double)numericUpDown2.Value / 100.0;
+                m_PMAlginRight.Angle = 5;
+                m_PMAlginRight.Zoom = 0.1;
+                m_PMAlginRight.OKScore = (double)numericUpDown2.Value / 100.0;
+                
+                // 패턴의 정상 여부 확인을 위해 찾은 패턴 기준 왼쪽과 오른쪽에서 특정 모양을 찾음.
+                // 그에 따른 세팅값 저장.
+                // 2012.11.01 김기택
+                if (m_CheckPosition == "")
+                {
+                    m_PMAlgin.SaveTool(tmp_Path + "\\" + cb_kind.Text + cb_direction.Text + "Tool.vpp");                    
+                }
+                else if (m_CheckPosition == "LEFT")
+                {                   
+                    m_PMAlginLeft.SaveTool(tmp_Path + "\\" + cb_kind.Text + cb_direction.Text + "LeftTool.vpp");
+
+                    //2015.08.12 cb_direction add. Lee gimoon
+                    m_Config.WriteValue(m_CheckPosition + cb_direction.Text, "CenterX", m_PMAlgin.TranslationX - m_PMAlginLeft.CenterX);
+                    m_Config.WriteValue(m_CheckPosition + cb_direction.Text, "CenterY", m_PMAlgin.TranslationY - m_PMAlginLeft.CenterY);
+                    m_Config.WriteValue(m_CheckPosition + cb_direction.Text, "Width", ((CogRectangleAffine)m_PMAlginLeft.Region).SideXLength);
+                    m_Config.WriteValue(m_CheckPosition + cb_direction.Text, "Height", ((CogRectangleAffine)m_PMAlginLeft.Region).SideYLength);
+                }
+                else
+                {
+                    m_PMAlginRight.SaveTool(tmp_Path + "\\" + cb_kind.Text + cb_direction.Text + "RightTool.vpp");
+                    //2015.08.12 cb_direction add. Lee gimoon
+                    m_Config.WriteValue(m_CheckPosition + cb_direction.Text, "CenterX", m_PMAlgin.TranslationX - m_PMAlginRight.CenterX);
+                    m_Config.WriteValue(m_CheckPosition + cb_direction.Text, "CenterY", m_PMAlgin.TranslationY - m_PMAlginRight.CenterY);
+                    m_Config.WriteValue(m_CheckPosition + cb_direction.Text, "Width", ((CogRectangleAffine)m_PMAlginRight.Region).SideXLength);
+                    m_Config.WriteValue(m_CheckPosition + cb_direction.Text, "Height", ((CogRectangleAffine)m_PMAlginRight.Region).SideYLength);                    
+                }
+
+                //m_PMAlgin.LoadTool(tmp_Path + "\\Tool.vpp");
+            }
+            else if (m_CurState == CURSTATE.ADD_PATTERN)
+            {
+                string tmp_Path = Application.StartupPath + "\\Pattern\\";
+                if (!System.IO.Directory.Exists(tmp_Path))
+                    System.IO.Directory.CreateDirectory(tmp_Path);
+
+                tmp_Path += cb_kind.Text + "\\";
+                if (!System.IO.Directory.Exists(tmp_Path))
+                    System.IO.Directory.CreateDirectory(tmp_Path);
+
+                tmp_Path += cb_direction.Text + "\\";
+                if (!System.IO.Directory.Exists(tmp_Path))
+                    System.IO.Directory.CreateDirectory(tmp_Path);
+
+                try
+                {
+                    if (m_CheckPosition == "")
+                    {
+                        string[] models = System.IO.Directory.GetFiles(tmp_Path);
+
+                        m_PMAlgin.Set_Pattern(tmp_Path + string.Format("{0:000}.hsr", models.Length), cogDisplay1.Image, false);
+
+                        m_PMAlgin.Load_Pattern(tmp_Path, cb_Model);
+                    }
+                    else if (m_CheckPosition == "LEFT")
+                    {
+                        tmp_Path += "Left\\";
+                        if (!System.IO.Directory.Exists(tmp_Path))
+                            System.IO.Directory.CreateDirectory(tmp_Path);
+
+                        string[] models = System.IO.Directory.GetFiles(tmp_Path);
+
+                        m_PMAlginLeft.Set_Pattern(tmp_Path + string.Format("{0:000}.hsr", models.Length), cogDisplay1.Image, false);
+
+                        m_PMAlginLeft.Load_Pattern(tmp_Path, comboBox1);
+                    }
+                    else
+                    {
+                        tmp_Path += "Right\\";
+                        if (!System.IO.Directory.Exists(tmp_Path))
+                            System.IO.Directory.CreateDirectory(tmp_Path);
+
+                        string[] models = System.IO.Directory.GetFiles(tmp_Path);
+
+                        m_PMAlginRight.Set_Pattern(tmp_Path + string.Format("{0:000}.hsr", models.Length), cogDisplay1.Image, false);
+
+                        m_PMAlginRight.Load_Pattern(tmp_Path, comboBox1);
+                    }
+                }
+                catch(Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+            }
+            //else if (m_CurState == CURSTATE.MODIFY_CIRCLE)
+            //{
+            //    if (m_CheckPosition == "")
+            //    {
+                    
+            //        ////m_Config.WriteValue("Circle" + cb_direction.Text, "CenterR", circle.Radius);
+
+            //        ////m_Config.WriteValue("Circle" + cb_direction.Text, "NumCalipers", circle.NumCalipers);
+            //        ////m_Config.WriteValue("Circle" + cb_direction.Text, "NumIgnores", circle.NumIgnores);
+            //        ////m_Config.WriteValue("Circle" + cb_direction.Text, "CaliperSearchLength", circle.CaliperSearchLength);
+            //        ////m_Config.WriteValue("Circle" + cb_direction.Text, "CaliperProjectionLength", circle.CaliperProjectionLength);
+
+            //        ////m_Config.WriteValue("Circle" + cb_direction.Text, "Direction", circle.Direction);
+            //        ////m_Config.WriteValue("Circle" + cb_direction.Text, "EdgeMode", circle.EdgeMode);
+            //        ////m_Config.WriteValue("Circle" + cb_direction.Text, "FilterHalfSizeInPixels", circle.FilterHalfSizeInPixels);
+            //        ////m_Config.WriteValue("Circle" + cb_direction.Text, "ContrastThreshold", circle.ContrastThreshold);
+
+
+            //        ////2015.09.14 cb_direction add. Lee gimoon
+            //        //m_Config.WriteValue("Circle" + cb_direction.Text, "CenterR", circle.Radius);
+
+            //        //m_Config.WriteValue("Circle" + cb_direction.Text, "NumCalipers", (int)nud_NumCalipers.Value);
+            //        //m_Config.WriteValue("Circle" + cb_direction.Text, "NumIgnores", (int)nud_NumIgnores.Value);
+            //        //m_Config.WriteValue("Circle" + cb_direction.Text, "CaliperSearchLength", (int)circle.CaliperSearchLength);
+            //        //m_Config.WriteValue("Circle" + cb_direction.Text, "CaliperProjectionLength", (int)circle.CaliperProjectionLength);
+
+            //        //m_Config.WriteValue("Circle" + cb_direction.Text, "Direction", cb_SearchDirection.Text);
+            //        //m_Config.WriteValue("Circle" + cb_direction.Text, "Polarity", cb_EdgeMode.Text);
+
+            //        //m_Config.WriteValue("Circle" + cb_direction.Text, "EdgeMode", cb_EdgeMode.Text);
+            //        ////m_Config.WriteValue("Circle" , "FilterHalfSizeInPixels", circle.FilterHalfSizeInPixels);
+            //        //m_Config.WriteValue("Circle" + cb_direction.Text, "ContrastThreshold", (int)nud_NumThreshold.Value);
+
+            //        //nud_SearchLength.Value = (decimal)circle.CaliperSearchLength;
+            //        //nud_ProjectionLength.Value = (decimal)circle.CaliperProjectionLength;
+
+                    
+            //    }
+            //    //else if (m_CheckPosition == "LEFT")
+            //    //{
+            //    //    //2015.08.12 cb_direction add. Lee gimoon
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "CenterR", circle.Radius);
+
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "NumCalipers", circle.NumCalipers);
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "NumIgnores", circle.NumIgnores);
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "CaliperSearchLength", circle.CaliperSearchLength);
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "CaliperProjectionLength", circle.CaliperProjectionLength);
+
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "Direction", circle.Direction);
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "EdgeMode", circle.EdgeMode);
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "FilterHalfSizeInPixels", circle.FilterHalfSizeInPixels);
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "ContrastThreshold", circle.ContrastThreshold);
+            //    //}
+            //    //else if (m_CheckPosition == "RIGHT")
+            //    //{
+            //    //    //2015.08.12 cb_direction add. Lee gimoon
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "CenterR", circle.Radius);
+
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "NumCalipers", circle.NumCalipers);
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "NumIgnores", circle.NumIgnores);
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "CaliperSearchLength", circle.CaliperSearchLength);
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "CaliperProjectionLength", circle.CaliperProjectionLength);
+
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "Direction", circle.Direction);
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "EdgeMode", circle.EdgeMode);
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "FilterHalfSizeInPixels", circle.FilterHalfSizeInPixels);
+            //    //    m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "ContrastThreshold", circle.ContrastThreshold);
+            //    //}    
+            //}
+            // 화면 클리어
+            cogDisplay1.InteractiveGraphics.Clear();
+            cogDisplay1.StaticGraphics.Clear();
+         
+            //panel_Confirm.Visible = false;
+        } 
+
+        private void btn_Cancle_Click(object sender, EventArgs e)
+        {
+            cogDisplay1.InteractiveGraphics.Clear();
+            cogDisplay1.StaticGraphics.Clear();
+
+            //panel_Confirm.Visible = false;
+
+            //m_PMAlgin.LoadTool(Application.StartupPath + "\\Tools\\Tool.vpp");
+        }
+
+        private void btn_LoadImage_Click(object sender, EventArgs e)
+        {
+            Console.WriteLine("Load Image");
+
+            cogDisplay1.InteractiveGraphics.Clear();
+            cogDisplay1.StaticGraphics.Clear();
+
+            OpenFileDialog loadImage = new OpenFileDialog();
+            string loadedImgPath;
+
+            //loadImage.InitialDirectory = m_Config.GetString("Result", "Path", "D:\\Result")+ "\\Image";
+            loadImage.Filter = "";
+            //loadImage.Filter += cb_kind.Text + "_" + cb_direction.Text + "|*" + cb_kind.Text + "_" + cb_direction.Text + "*.bmp";
+            loadImage.Filter += "bmp|*.bmp|jpg|*.jpg";
+
+            if (loadImage.ShowDialog() == DialogResult.OK)
+                loadedImgPath = loadImage.FileName;
+            else return;
+
+            
+
+            ImageFile imageFile = new ImageFile();
+
+            try
+            {
+                cogDisplay1.Image = new CogImage24PlanarColor(new Bitmap(loadedImgPath));
+                // 이미지 변환
+                ICogImage monoimage = cogDisplay1.Image.GetType().Name == "CogImage8Grey" ? cogDisplay1.Image : new ImageFile().Get_Plan((CogImage24PlanarColor)cogDisplay1.Image, "Intensity");
+
+                // 캘리브레이션 툴 로드
+                CogCalibCheckerboardTool calib = new CogCalibCheckerboardTool();
+                calib = (Cognex.VisionPro.CalibFix.CogCalibCheckerboardTool)Cognex.VisionPro.CogSerializer.LoadObjectFromFile(System.Windows.Forms.Application.StartupPath + "\\Tools\\" + cb_kind.Text + cb_direction.Text + "Calib.vpp");
+                calib.InputImage = monoimage;
+
+                calib.Run();
+                                
+                m_PMAlgin.Image = calib.OutputImage;
+                m_PMAlginLeft.Image = calib.OutputImage;
+                m_PMAlginRight.Image = calib.OutputImage;
+                cogDisplay1.Image = calib.OutputImage;
+            }
+            catch(Exception ex)
+            {
+            }
+        }
+
+        private void btn_DoInspection_Click(object sender, EventArgs e)
+        {
+            cogDisplay1.InteractiveGraphics.Clear();
+            cogDisplay1.StaticGraphics.Clear();
+
+            m_PMAlgin.LoadTool(Application.StartupPath + "\\Tools\\" + cb_kind.Text + cb_direction.Text + "Tool.vpp");
+            m_PMAlgin.Load_Pattern(Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text, cb_Model);
+           
+            // 패턴 로드 RH
+            m_PMAlginRight.LoadTool(Application.StartupPath + "\\Tools\\" + cb_kind.Text + cb_direction.Text + "RightTool.vpp");
+            m_PMAlginRight.Load_Pattern(Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text + "\\Right", comboBox1);
+
+            // 패턴 로드 LH
+            m_PMAlginLeft.LoadTool(Application.StartupPath + "\\Tools\\" + cb_kind.Text + cb_direction.Text + "LeftTool.vpp");
+            m_PMAlginLeft.Load_Pattern(Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text + "\\Left", comboBox1);
+
+            
+            double score = m_PMAlgin.FindPattern(cogDisplay1, true);
+            score = (double)((int)(score * 10000 + 0.5)) / 10000.0;     // 소수 세째 자리 반올림
+            bool result = false;
+
+            double score1 = 0.0;
+            double score2 = 0.0;
+
+            if (score * 100.0 > m_Config.GetDouble("Pattern", "Score", 60))
+            {
+                // 패턴 찾은 결과
+                result = true;
+
+                // 패턴 중심 위치
+                double x = m_PMAlgin.TranslationX;
+                double y = m_PMAlgin.TranslationY;
+                
+
+
+                //방향
+                x *= m_Config.GetDouble("Location", "X", 1);
+                y *= m_Config.GetDouble("Location", "Y", 1);
+
+
+                //#region 중앙원 찾기
+                Cognex.VisionPro.Caliper.CogFindCircleTool cogFindCircle = new Cognex.VisionPro.Caliper.CogFindCircleTool();
+
+                cogFindCircle.InputImage = (CogImage8Grey)cogDisplay1.Image;
+
+                cogFindCircle.RunParams.CaliperSearchDirection = m_Config.GetString("Circle", "Direction", "Inward") == "Inward" ? Cognex.VisionPro.Caliper.CogFindCircleSearchDirectionConstants.Inward : Cognex.VisionPro.Caliper.CogFindCircleSearchDirectionConstants.Outward;
+
+                cogFindCircle.RunParams.CaliperRunParams.Edge0Polarity = Cognex.VisionPro.Caliper.CogCaliperPolarityConstants.DontCare;
+
+                cogFindCircle.RunParams.CaliperRunParams.EdgeMode = Cognex.VisionPro.Caliper.CogCaliperEdgeModeConstants.SingleEdge;
+                cogFindCircle.RunParams.CaliperRunParams.FilterHalfSizeInPixels = m_Config.GetInt32("Circle", "FilterHalfSizeInPixels", 2);
+                cogFindCircle.RunParams.CaliperRunParams.ContrastThreshold = m_Config.GetInt32("Circle", "ContrastThreshold", 5);
+                 
+                cogFindCircle.RunParams.NumCalipers = m_Config.GetInt32("Circle", "NumCalipers", 40);
+
+                cogFindCircle.RunParams.NumToIgnore = m_Config.GetInt32("Circle", "NumIgnores", 10);
+ 
+
+                cogFindCircle.RunParams.CaliperSearchLength = m_Config.GetInt32("Circle", "CaliperSearchLength", 23);
+
+                cogFindCircle.RunParams.CaliperProjectionLength = m_Config.GetDouble("Circle", "CaliperProjectionLength", 0.8);   
+         
+
+                // 찾을원 위치
+                cogFindCircle.RunParams.ExpectedCircularArc.CenterX = m_PMAlgin.TranslationX;
+                cogFindCircle.RunParams.ExpectedCircularArc.CenterY = m_PMAlgin.TranslationY;
+                cogFindCircle.RunParams.ExpectedCircularArc.Radius = m_Config.GetDouble("Circle", "Radius", 12);
+                cogFindCircle.RunParams.ExpectedCircularArc.AngleStart = 0;
+                cogFindCircle.RunParams.ExpectedCircularArc.AngleSpan = 360;
+
+                cogFindCircle.Run();
+
+                if (cogFindCircle.Results != null && cogFindCircle.Results.GetCircle() != null)
+                {
+
+                    Cognex.VisionPro.ICogGraphic ResultGp;
+
+                    ResultGp = (Cognex.VisionPro.ICogGraphic)cogFindCircle.Results.GetCircularArc();
+
+
+                    ResultGp.Color = Cognex.VisionPro.CogColorConstants.Blue;
+
+                    cogDisplay1.StaticGraphics.Add(ResultGp, "");
+
+                    x = cogFindCircle.Results.GetCircle().CenterX;
+                    y = cogFindCircle.Results.GetCircle().CenterY;
+                }
+
+                //#endregion
+
+                //Cognex.VisionPro.CogRectangleAffine Leftrec = new CogRectangleAffine();
+                //Cognex.VisionPro.CogRectangleAffine Rightrec = new CogRectangleAffine();
+                //#region 보조패턴 1 (m_PMAlginLeft)
+                //m_PMAlginLeft.CenterX = 0;
+                //m_PMAlginLeft.CenterY = 0;
+
+                //Leftrec.SetCenterLengthsRotationSkew(m_PMAlgin.TranslationX - m_Config.GetInt32("Left" + cb_direction.Text, "CenterX", 0), m_PMAlgin.TranslationY - m_Config.GetInt32("Left" + cb_direction.Text, "CenterY", 0), m_Config.GetInt32("Left" + cb_direction.Text, "Width", 0), m_Config.GetInt32("Left" + cb_direction.Text, "Height", 0), 0, 0);
+                //m_PMAlginLeft.Region = Leftrec;
+
+                //score1 = m_PMAlginLeft.FindPattern(cogDisplay1, true);
+
+                //#endregion
+
+                //double x1 = m_PMAlginLeft.TranslationX;
+                //double y1 = m_PMAlginLeft.TranslationY;
+                //double angle = (m_PMAlginLeft.Rotation) * 180 / Math.PI;
+                //angle = (double)((int)(angle * 100 + 0.5)) / 100.0; // 소수 세째 자리 반올림
+
+                //angle *= m_Config.GetDouble("Location", "T", 1);
+                
+                //#region 보조패턴 2 (m_PMAlginRight)
+                //m_PMAlginRight.CenterX = 0;
+                //m_PMAlginRight.CenterY = 0;
+
+                //Rightrec.SetCenterLengthsRotationSkew(m_PMAlgin.TranslationX - m_Config.GetInt32("Right" + cb_direction.Text, "CenterX", 0), m_PMAlgin.TranslationY - m_Config.GetInt32("Right" + cb_direction.Text, "CenterY", 0), m_Config.GetInt32("Right" + cb_direction.Text, "Width", 0), m_Config.GetInt32("Right" + cb_direction.Text, "Height", 0), 0, 0);
+                //m_PMAlginRight.Region = Rightrec;
+
+                //score2 = m_PMAlginRight.FindPattern(cogDisplay1, true);
+
+                //#endregion
+
+                //double x2 = m_PMAlginRight.TranslationX;
+                //double y2 = m_PMAlginRight.TranslationY;
+
+         
+                
+              
+
+                //#region 원찾기 2
+                //cogFindCircle.RunParams.CaliperSearchLength = 3;
+                //cogFindCircle.RunParams.CaliperProjectionLength = 3;
+                //cogFindCircle.RunParams.NumCalipers = 10;
+                //cogFindCircle.RunParams.NumToIgnore = 0;
+
+                //cogFindCircle.RunParams.CaliperSearchDirection = Cognex.VisionPro.Caliper.CogFindCircleSearchDirectionConstants.Inward;
+                //cogFindCircle.RunParams.CaliperRunParams.EdgeMode = Cognex.VisionPro.Caliper.CogCaliperEdgeModeConstants.SingleEdge;
+                //cogFindCircle.RunParams.CaliperRunParams.FilterHalfSizeInPixels = 2;
+                //cogFindCircle.RunParams.CaliperRunParams.ContrastThreshold = 40;
+
+                //// 찾을원 위치
+                //cogFindCircle.RunParams.ExpectedCircularArc.CenterX = x2;
+                //cogFindCircle.RunParams.ExpectedCircularArc.CenterY = y2;
+                //cogFindCircle.RunParams.ExpectedCircularArc.Radius = m_Config.GetDouble("Circle", "Pos1R", 5);
+                //cogFindCircle.RunParams.ExpectedCircularArc.AngleStart = 0;
+                //cogFindCircle.RunParams.ExpectedCircularArc.AngleSpan = 360;
+
+                //cogFindCircle.Run();
+
+
+                //if (cogFindCircle.Results.GetCircle() != null)
+                //{
+
+                //    Cognex.VisionPro.ICogGraphic ResultGp;
+
+                //    ResultGp = (Cognex.VisionPro.ICogGraphic)cogFindCircle.Results.GetCircularArc();
+
+
+                //    ResultGp.Color = Cognex.VisionPro.CogColorConstants.Green;
+
+                //    cogDisplay1.StaticGraphics.Add(ResultGp, "");
+
+                //    x2 = cogFindCircle.Results.GetCircle().CenterX;
+                //    y2 = cogFindCircle.Results.GetCircle().CenterY;
+                //}
+                //#endregion
+
+                // 보정량 계산
+
+                //angle = (m_PMAlginLeft.Rotation) * 180 / Math.PI;
+                //angle = (double)((int)(angle * 100 + 0.5)) / 100.0; // 소수 세째 자리 반올림
+                //angle = (CogMath.AnglePointPoint(x, y, x2, y2) * 180) / Math.PI;
+                //angle = angle < 0 ? 360 + angle : angle;
+
+                if (score1 * 100 >= m_Config.GetDouble("Pattern", "Left Score", 60)
+                    && score2 * 100 >= m_Config.GetDouble("Pattern", "Right Score", 60))
+                {
+                    try
+                    {
+                        // 찾은 위치 표시
+                        //lb_FindX.Text = x.ToString();
+                        //lb_FindY.Text = y.ToString();
+                        lb_FindX.Text = Math.Round(x, 2).ToString();
+                        lb_FindY.Text = Math.Round(y, 2).ToString();
+
+
+                        // 이동할 량 표시
+                        //lb_MoveX.Text = (double.Parse(tb_MasterX.Text) - x).ToString();
+                        //lb_MoveY.Text = (double.Parse(tb_MasterY.Text) - y).ToString();
+                        lb_MoveX.Text = Math.Round((double.Parse(tb_MasterX.Text) - x), 4).ToString();
+                        lb_MoveY.Text = Math.Round((double.Parse(tb_MasterY.Text) - y), 4).ToString();
+
+                    }
+                    catch
+                    {
+
+                    }
+
+                }
+                else
+                {
+                    //MessageBox.Show(string.Format("비정상적인 패턴입니다.(Left:{0:0.00}, Right:{1:0.00})", score1, score2));
+                }
+
+                // 이동방향 화면 표시
+                //m_PMAlgin.DrawRectangle("보정 결과", 10, 10, m_PMAlgin.Image.Height - 130, 130, m_PMAlgin.Image.Height - 10, cogDisplay1, CogColorConstants.Orange, CogColorConstants.None);
+                //m_PMAlgin.DrawTowPointLine(70, m_PMAlgin.Image.Height - 70, 70, m_PMAlgin.Image.Height - 120, 2, cogDisplay1, CogColorConstants.Orange, CogColorConstants.None);
+                ////m_PMAlgin.DrawTowPointLine(70, m_PMAlgin.Image.Height - 70, 70 - (Math.Cos(angle) * x), m_PMAlgin.Image.Height - 120 - (Math.Sin(angle) * x), 2, cogDisplay1, CogColorConstants.Magenta, CogColorConstants.None);
+                ////m_PMAlgin.DrawTowPointLine(70, m_PMAlgin.Image.Height - 70, 70 + (Math.Cos(angle) * y), m_PMAlgin.Image.Height - 120 + (Math.Sin(angle) * y), 2, cogDisplay1, CogColorConstants.Magenta, CogColorConstants.None);
+                //m_PMAlgin.DrawTowPointLine(70, m_PMAlgin.Image.Height - 70, 70 + x, m_PMAlgin.Image.Height - 70, 2, cogDisplay1, CogColorConstants.Magenta, CogColorConstants.None);
+                //m_PMAlgin.DrawTowPointLine(70, m_PMAlgin.Image.Height - 70, 70, m_PMAlgin.Image.Height - 120 + y, 2, cogDisplay1, CogColorConstants.Magenta, CogColorConstants.None);
+
+
+            }
+
+            m_PMAlgin.DrawLabel("Location Pattern Score = " + (score * 100.0) + "(" + m_PMAlgin.FindPatternIndex + ")", cogDisplay1, 17, 30, 17, score * 100.0 > m_Config.GetDouble("Pattern", "Score", 60) ? CogColorConstants.Blue : CogColorConstants.Red, CogColorConstants.Grey);
+            m_PMAlginLeft.DrawLabel("Sub Pattern Score(LEFT) = " + (score1 * 100.0) + "(" + m_PMAlginLeft.FindPatternIndex + ")", cogDisplay1, 17, 110, 17, score1 * 100.0 > m_Config.GetDouble("Pattern", "Left Score", 60) ? CogColorConstants.Blue : CogColorConstants.Red, CogColorConstants.Grey);
+            m_PMAlginRight.DrawLabel("Sub Pattern Score(Right) = " + (score2 * 100.0) + "(" + m_PMAlgin.FindPatternIndex + ")", cogDisplay1, 17, 200, 17, score2 * 100.0 > m_Config.GetDouble("Pattern", "Right Score", 60) ? CogColorConstants.Blue : CogColorConstants.Red, CogColorConstants.Grey);
+        }
+
+        private void cb_Model_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            cogDisplay2.InteractiveGraphics.Clear();
+            cogDisplay2.StaticGraphics.Clear();
+            cogDisplay2.Image = null;
+
+            m_PMAlgin.Show_Pattern(cb_Model.SelectedIndex, cogDisplay2);
+            
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            // 켈리브레이션 툴
+            CogCalibCheckerboardTool cali = new CogCalibCheckerboardTool();
+            // 켈리브레이션 툴 이미지 로드
+            if (cogDisplay1.Image == null)
+            {
+                MessageBox.Show("이미지가 없습니다.", "A엔진 블럭 투입 로봇비전", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            cali.InputImage = cogDisplay1.Image.GetType().Name == "CogImage8Grey" ? cogDisplay1.Image : new ImageFile().Get_Plan((CogImage24PlanarColor)cogDisplay1.Image, "Intensity");
+
+            // 설정
+            cali.Calibration.ComputationMode = CogCalibFixComputationModeConstants.Linear;
+            cali.Calibration.FiducialMark = CogCalibCheckerboardFiducialConstants.None;
+            cali.Calibration.CalibratedOriginSpace = CogCalibCheckerboardAdjustmentSpaceConstants.Uncalibrated;
+            cali.Calibration.CalibratedXAxisRotationSpace = CogCalibCheckerboardAdjustmentSpaceConstants.Uncalibrated;
+
+            // 타일 사이즈
+            cali.Calibration.PhysicalTileSizeX = 10;
+            cali.Calibration.PhysicalTileSizeY = 10;
+
+            // 보정 이미지 그랩
+            cali.Calibration.CalibrationImage = cali.InputImage;
+
+            // 보정 계산
+            cali.Calibration.Calibrate();
+            // 캘리브레이션 툴 실행
+            cali.Run();
+
+            // 결과 저장
+            string tmp_Path = Application.StartupPath + "\\Tools\\";
+            if (!System.IO.Directory.Exists(tmp_Path))
+                System.IO.Directory.CreateDirectory(tmp_Path);
+
+            Cognex.VisionPro.CogSerializer.SaveObjectToFile(cali, Application.StartupPath + "\\Tools\\Calib.vpp");
+        }
+
+        private void cb_kind_SelectedIndexChanged(object sender, EventArgs e)
+        {
+          //  cb_direction.Text = m_Config.GetString("Number", cb_kind.Items.IndexOf, "Error");
+            
+            // 패턴 로드
+            m_PMAlgin.LoadTool(Application.StartupPath + "\\Tools\\" + cb_kind.Text + cb_direction.Text + "Tool.vpp");
+            m_PMAlgin.Load_Pattern(Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text, cb_Model);
+
+            //// 패턴 로드
+            m_PMAlginLeft.LoadTool(Application.StartupPath + "\\Tools\\" + cb_kind.Text + cb_direction.Text + "LeftTool.vpp");
+            m_PMAlginLeft.Load_Pattern(Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text + "\\Left", comboBox1);
+
+            //// 패턴 로드
+            m_PMAlginRight.LoadTool(Application.StartupPath + "\\Tools\\" + cb_kind.Text + cb_direction.Text + "RightTool.vpp");
+            m_PMAlginRight.Load_Pattern(Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text + "\\Right", comboBox1);
+
+            // 합격점수 로드
+            numericUpDown1.Value = m_Config.GetInt32("Pattern", "Score", 60);
+
+            m_CheckPosition = comboBox2.Text = "LEFT";
+
+            // 합격점수 로드
+            numericUpDown2.Value = m_Config.GetInt32("Pattern", "Left Score", 60);
+
+            // 마스터값 로드
+            tb_MasterX.Text = m_Config.GetString("Master", cb_kind.Text + cb_direction.Text + "X", "");
+            tb_MasterY.Text = m_Config.GetString("Master", cb_kind.Text + cb_direction.Text + "Y", "");
+            tb_MasterT.Text = m_Config.GetString("Master", cb_kind.Text + cb_direction.Text + "Angle", "");
+
+            // 원 찾기
+            nud_NumCalipers.Value = (decimal)m_Config.GetInt32("Circle" + cb_direction.Text, "NumCalipers", 10);
+            nud_NumIgnores.Value = (decimal)m_Config.GetInt32("Circle" + cb_direction.Text, "NumIgnores", 5);
+
+            nud_SearchLength.Value = (decimal)m_Config.GetInt32("Circle" + cb_direction.Text, "CaliperSearchLength", 20);
+            nud_ProjectionLength.Value = (decimal)m_Config.GetInt32("Circle" + cb_direction.Text, "CaliperProjectionLength", 10);
+
+            cb_SearchDirection.Text = m_Config.GetString("Circle" + cb_direction.Text, "Direction", "Inward");
+           
+            cb_EdgeMode.Text = m_Config.GetString("Circle" + cb_direction.Text, "Polarity", "LightToDark");
+            
+            nud_NumThreshold.Value = (decimal)m_Config.GetInt32("Circle" + cb_direction.Text, "ContrastThreshold", 40);
+
+            
+        }
+
+        private void btn_SaveScore_Click(object sender, EventArgs e)
+        {
+
+            m_PMAlgin.OKScore = (double)numericUpDown1.Value / 100.0;
+            m_Config.WriteValue("Pattern", "Score", (int)numericUpDown1.Value);
+            // 합격점수 로드
+            numericUpDown1.Value = m_Config.GetInt32("Pattern", "Score", 60);
+        }
+
+        private void button7_Click(object sender, EventArgs e)
+        {
+            Console.WriteLine("Modify Inspection Range");
+
+            if (cogDisplay1.Image == null)
+            {
+                MessageBox.Show("Not Image.", "Guidence Vision", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            cogDisplay1.InteractiveGraphics.Clear();
+            cogDisplay1.StaticGraphics.Clear();
+
+            // 현재 수정 모드
+            m_CurState = CURSTATE.MODIFY_RANGE;
+            m_CheckPosition = comboBox2.Text;
+
+            double score = m_PMAlgin.FindPattern(cogDisplay1, true);
+            score = (double)((int)(score * 10000 + 0.5)) / 10000.0;     // 소수 세째 자리 반올림
+            bool result = false;
+
+            if (score * 100.0 > m_Config.GetDouble("Pattern", "Score", 60))
+            {
+                // 패턴 찾은 결과
+                result = true;
+
+                // 검사영역 표시
+                if (comboBox2.Text == "LEFT")
+                {
+                    //m_PMAlginLeft.Region.CenterX -= x;
+                    Cognex.VisionPro.CogRectangleAffine rec = new CogRectangleAffine();
+                    //m_CheckPosition + cb_direction.Text
+                    //rec.SetCenterLengthsRotationSkew(m_PMAlgin.TranslationX - m_Config.GetInt32("Pattern", "CenterX", 160), m_PMAlgin.TranslationY - m_Config.GetInt32("Pattern", "CenterY", 50), m_Config.GetInt32("Pattern", "Width", 90), m_Config.GetInt32("Pattern", "Height", 50), 0, 0);
+                    rec.SetCenterLengthsRotationSkew(m_PMAlgin.TranslationX - m_Config.GetInt32("Left" + cb_direction.Text, "CenterX", 160), m_PMAlgin.TranslationY - m_Config.GetInt32("Left" + cb_direction.Text, "CenterY", 50), m_Config.GetInt32("Left" + cb_direction.Text, "Width", 90), m_Config.GetInt32("Left" + cb_direction.Text, "Height", 50), 0, 0);
+                    m_PMAlginLeft.Region = rec;
+
+                    m_PMAlginLeft.DisplaySearchArea(cogDisplay1, true);
+                }
+                else
+                {
+                    Cognex.VisionPro.CogRectangleAffine rec = new CogRectangleAffine();
+
+                    //rec.SetCenterLengthsRotationSkew(m_PMAlgin.TranslationX + m_Config.GetInt32("Pattern", "CenterX", 160), m_PMAlgin.TranslationY + m_Config.GetInt32("Pattern", "CenterY", 50), m_Config.GetInt32("Pattern", "Width", 90), m_Config.GetInt32("Pattern", "Height", 50), 0, 0);
+                    rec.SetCenterLengthsRotationSkew(m_PMAlgin.TranslationX - m_Config.GetInt32("Right" + cb_direction.Text, "CenterX", 160), m_PMAlgin.TranslationY - m_Config.GetInt32("Right" + cb_direction.Text, "CenterY", 50), m_Config.GetInt32("Right" + cb_direction.Text, "Width", 90), m_Config.GetInt32("Right" + cb_direction.Text, "Height", 50), 0, 0);
+                    m_PMAlginRight.Region = rec;
+
+                    m_PMAlginRight.DisplaySearchArea(cogDisplay1, true);
+                }
+
+                // 저장 버튼 활성화
+                panel_Confirm.Visible = true;
+            }
+            else
+            {
+                MessageBox.Show("메인 패턴 찾기 실패!");
+            }
+        }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+            if (comboBox2.Text == "LEFT")
+            {
+                m_PMAlginLeft.OKScore = (double)numericUpDown2.Value / 100.0;
+            }
+            else
+            {
+                m_PMAlginRight.OKScore = (double)numericUpDown2.Value / 100.0;
+            }
+            m_Config.WriteValue("Pattern", comboBox2.Text + " Score", (int)numericUpDown2.Value);
+
+            // 합격점수 로드
+            numericUpDown2.Value = m_Config.GetInt32("Pattern", comboBox2.Text + " Score", 60);
+        }
+
+        private void comboBox2_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            //2015.08.121 Lee gimoon modify
+            m_CheckPosition = comboBox2.Text;
+
+            comboBox1.Text = "";
+
+            cogDisplay3.InteractiveGraphics.Clear();
+            cogDisplay3.StaticGraphics.Clear();
+            cogDisplay3.Image = null;
+
+            if (comboBox2.Text == "LEFT")
+            {
+                // 패턴 로드
+                m_PMAlginLeft.LoadTool(Application.StartupPath + "\\Tools\\" + cb_kind.Text + cb_direction.Text + "LeftTool.vpp");
+                m_PMAlginLeft.Load_Pattern(Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text + "\\Left", comboBox1);
+
+                
+
+            }
+            else
+            {
+                // 패턴 로드
+                m_PMAlginRight.LoadTool(Application.StartupPath + "\\Tools\\" + cb_kind.Text + cb_direction.Text + "RightTool.vpp");
+                m_PMAlginRight.Load_Pattern(Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text + "\\Right", comboBox1);
+
+                
+            }
+
+            // 합격점수 로드
+            numericUpDown2.Value = m_Config.GetInt32("Pattern", comboBox2.Text + " Score", 60);
+
+            // 보조 원 찾기 m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "CenterR", circle.Radius);
+            nud_SubNumCalipers.Value = (decimal)m_Config.GetInt32("SubCircle" + cb_direction.Text, m_CheckPosition + "NumCalipers", 5);
+            nud_SubNumIgnores.Value = (decimal)m_Config.GetInt32("SubCircle" + cb_direction.Text, m_CheckPosition + "NumIgnores", 5);
+
+            nud_SubSearchLength.Value = (decimal)m_Config.GetInt32("SubCircle" + cb_direction.Text, m_CheckPosition + "CaliperSearchLength", 5);
+            nud_SubProjectionLength.Value = (decimal)m_Config.GetInt32("SubCircle" + cb_direction.Text, m_CheckPosition + "CaliperProjectionLength", 5);
+
+            cb_SubSearchDirection.Text = m_Config.GetString("SubCircle" + cb_direction.Text, m_CheckPosition + "Direction", "Inward");
+            cb_SubEdgeMode.Text = m_Config.GetString("SubCircle" + cb_direction.Text, m_CheckPosition + "EdgeMode", "SingleEdge");
+        }
+
+        private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            cogDisplay3.InteractiveGraphics.Clear();
+            cogDisplay3.StaticGraphics.Clear();
+            cogDisplay3.Image = null;
+
+            if(comboBox2.Text == "LEFT")
+                m_PMAlginLeft.Show_Pattern(comboBox1.SelectedIndex, cogDisplay3);
+            else
+                m_PMAlginRight.Show_Pattern(comboBox1.SelectedIndex, cogDisplay3);
+        }
+
+        private void button4_Click(object sender, EventArgs e)
+        {
+            Console.WriteLine("Add Model");
+
+            if (cogDisplay1.Image == null)
+            {
+                MessageBox.Show("이미지가 없습니다.", "U엔진 블럭 투입 로봇비전", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            cogDisplay1.InteractiveGraphics.Clear();
+            cogDisplay1.StaticGraphics.Clear();
+
+            // 현재 수정 모드
+            m_CurState = CURSTATE.ADD_PATTERN;
+            m_CheckPosition = comboBox2.Text;
+
+            // 검사영역 표시
+            if(comboBox2.Text == "LEFT")            
+                m_PMAlginLeft.Display_PatternArea(cogDisplay1);
+            else
+                m_PMAlginRight.Display_PatternArea(cogDisplay1);
+
+            // 저장 버튼 활성화
+            panel_Confirm.Visible = true;
+           
+        }
+
+        private void button3_Click(object sender, EventArgs e)
+        {
+            if (MessageBox.Show("정말 삭제 하시겠습니까?", "삭제확인", MessageBoxButtons.YesNo) == DialogResult.No)
+            {
+                return;
+            }
+
+            // 패턴 파일 삭제
+            string tmpPath = Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text + "\\" + comboBox2.Text + "\\";
+            System.IO.File.Delete(tmpPath + comboBox1.Text + ".hsr");
+
+            //콤보박스 텍스트 지우고...
+            comboBox1.Text = "";
+
+            // 경로 지정 후...
+            string[] files = System.IO.Directory.GetFiles(tmpPath);
+
+            //for문 돌려서 i랑 파일이름이랑 같으면 계속 그렇지 않으면  
+            for (int i = 0; i < files.Length; i++)
+            {
+                string name = files[i];
+
+                if (int.Parse(name.Substring(name.Length - 7, 3)) == i)
+                {
+                    continue;
+                }
+                else
+                {
+                    //먼저 name을 i이름으로 파일복사하고 
+                    System.IO.File.Copy(name, tmpPath + string.Format("{0:000}.hsr", i));
+                    //기존name을 삭제한다.
+                    System.IO.File.Delete(name);
+                }
+            }
+
+            //다 끝나면 Master의 패턴을 다시 로드한다.
+            if(comboBox2.Text == "LEFT")            
+                m_PMAlginLeft.Load_Pattern(Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text + "\\" + comboBox2.Text, comboBox1);
+            else
+                m_PMAlginRight.Load_Pattern(Application.StartupPath + "\\Pattern\\" + cb_kind.Text + "\\" + cb_direction.Text + "\\" + comboBox2.Text, comboBox1);
+
+            //모델화면 지우기
+            cogDisplay3.Image = null;
+        }
+
+        private FindCircle circle = new FindCircle();
+
+        private void btn_SearchCircle_Click(object sender, EventArgs e)
+        {
+            Console.WriteLine("Modify Inspection Range");
+            double x =0;
+            double y =0;
+            if (cogDisplay1.Image == null)
+            {
+                MessageBox.Show("Not Loaded Image", "Guidence Vision", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            cogDisplay1.InteractiveGraphics.Clear();
+            cogDisplay1.StaticGraphics.Clear();
+
+            double score = m_PMAlgin.FindPattern(cogDisplay1, true);
+            score = (double)((int)(score * 10000 + 0.5)) / 10000.0;     // 소수 세째 자리 반올림
+            bool result = false;
+
+            if (score * 100.0 > m_Config.GetDouble("Pattern", "Score", 60))
+            {
+                // 패턴 찾은 결과
+                result = true;
+
+                // 패턴 중심 위치
+                x = m_PMAlgin.TranslationX;
+                y = m_PMAlgin.TranslationY;
+
+
+                // 현재 수정 모드
+                m_CurState = CURSTATE.MODIFY_CIRCLE;
+
+                // 검사영역 표시
+                //circle.CenterX = m_Config.GetDouble("Master", cb_kind.Text + cb_direction.Text + "X", 114);
+                //circle.CenterY = m_Config.GetDouble("Master", cb_kind.Text + cb_direction.Text + "Y", 95);
+                circle.CenterX = x;
+                circle.CenterY = y;
+                circle.AngleSpan = 360;
+                circle.AngleStart = 0;
+                circle.Radius = m_Config.GetDouble("Circle" + cb_direction.Text, "CenterR", 55);
+
+                circle.NumCalipers = (int)nud_NumCalipers.Value; //m_Config.GetInt32("Circle", "NumCalipers", 10);
+                circle.NumIgnores = (int)nud_NumIgnores.Value; //m_Config.GetInt32("Circle", "NumIgnores", 5);
+                circle.CaliperSearchLength = (int)nud_SearchLength.Value; //m_Config.GetInt32("Circle", "CaliperSearchLength", 20);
+                circle.CaliperProjectionLength = (int)nud_ProjectionLength.Value; //m_Config.GetInt32("Circle", "CaliperProjectionLength", 10);
+
+                circle.Direction = cb_SearchDirection.Text; //m_Config.GetString("Circle", "Direction", "Inward");
+                circle.EdgeMode = cb_EdgeMode.Text; //m_Config.GetString("Circle", "EdgeMode", "SingleEdge");
+                circle.FilterHalfSizeInPixels = m_Config.GetInt32("Circle", "FilterHalfSizeInPixels", 2);
+                circle.ContrastThreshold = (int)nud_NumThreshold.Value;
+
+                // 검사영역 표시
+                circle.Display_SettingArea(cogDisplay1, true);
+
+                // 저장 버튼 활성화
+                panel_Confirm.Visible = true;
+
+                m_CheckPosition = "";
+            }
+            else {
+
+                MessageBox.Show("Master Pattern Not Find");
+            }
+
+        }
+
+        private void btn_SubSearchCircle_Click(object sender, EventArgs e)
+        {
+            Console.WriteLine("Modify Inspection Range");
+
+            if (cogDisplay1.Image == null)
+            {
+                MessageBox.Show("Not Loaded Image", "Guidence Vision", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            cogDisplay1.InteractiveGraphics.Clear();
+            cogDisplay1.StaticGraphics.Clear();
+
+            // 현재 수정 모드
+            m_CurState = CURSTATE.MODIFY_CIRCLE;
+
+            // 검사영역 표시
+            circle.CenterX = m_Config.GetDouble("Master", cb_kind.Text + cb_direction.Text + "X", 114);
+            circle.CenterY = m_Config.GetDouble("Master", cb_kind.Text + cb_direction.Text + "Y", 95);
+            circle.AngleSpan = 360;
+            circle.AngleStart = 0;
+            //m_Config.WriteValue("SubCircle" + cb_direction.Text, m_CheckPosition + "CenterR", circle.Radius);
+            circle.Radius = m_Config.GetDouble("SubCircle" + cb_direction.Text, m_CheckPosition + "CenterR", 5);
+
+            circle.NumCalipers = (int)nud_SubNumCalipers.Value; //m_Config.GetInt32("Circle", "NumCalipers", 10);
+            circle.NumIgnores = (int)nud_SubNumIgnores.Value; //m_Config.GetInt32("Circle", "NumIgnores", 5);
+            circle.CaliperSearchLength = (int)nud_SubSearchLength.Value; //m_Config.GetInt32("Circle", "CaliperSearchLength", 20);
+            circle.CaliperProjectionLength = (int)nud_SubProjectionLength.Value; //m_Config.GetInt32("Circle", "CaliperProjectionLength", 10);
+
+            circle.Direction = cb_SubSearchDirection.Text; //m_Config.GetString("Circle", "Direction", "Inward");
+            circle.EdgeMode = cb_SubEdgeMode.Text; //m_Config.GetString("Circle", "EdgeMode", "SingleEdge");
+            circle.FilterHalfSizeInPixels = m_Config.GetInt32("SubCircle" + cb_direction.Text, m_CheckPosition + "FilterHalfSizeInPixels", 2);
+            circle.ContrastThreshold = m_Config.GetInt32("SubCircle" + cb_direction.Text, m_CheckPosition + "ContrastThreshold", 40);
+
+            // 검사영역 표시
+            circle.Display_SettingArea(cogDisplay1, true);
+
+            // 저장 버튼 활성화
+            panel_Confirm.Visible = true;
+            //2015.08.12 Modfiy Lee gimoon 
+            //m_CheckPosition = "Sub";
+        }
+
+        private void btn_MaskImage_Click(object sender, EventArgs e)
+        {
+            Form_Masking mask = new Form_Masking((CogImage8Grey)cogDisplay1.Image);
+
+            if (mask.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                m_PMAlgin.MaskImage = (CogImage8Grey)mask.MASKIMAGE;
+                m_PMAlginLeft.MaskImage = (CogImage8Grey)mask.MASKIMAGE;
+                m_PMAlginRight.MaskImage = (CogImage8Grey)mask.MASKIMAGE;
+
+            }
+        }
+
+        private void nud_NumCalipers_ValueChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void btn_MasterSave_Click(object sender, EventArgs e)
+        {
+            if (tb_MasterX.Text == "" || tb_MasterY.Text == "" || tb_MasterT.Text == "")
+            {
+                MessageBox.Show("Master Not Value");
+                return;
+            }
+            else
+            {
+                m_Config.WriteValue("Master", cb_kind.Text + cb_direction.Text + "X", tb_MasterX.Text);
+                m_Config.WriteValue("Master", cb_kind.Text + cb_direction.Text + "Y", tb_MasterY.Text);
+                m_Config.WriteValue("Master", cb_kind.Text + cb_direction.Text + "Angle", tb_MasterT.Text);
+            }
+        }
+
+        private void btn_FindToMaster_Click(object sender, EventArgs e)
+        {
+            if (lb_FindX.Text == "" || lb_FindY.Text == "" || lb_FindT.Text == "")
+            {
+                MessageBox.Show("Find Position Not Value");
+                return;
+            }
+            tb_MasterX.Text = lb_FindX.Text;
+            tb_MasterY.Text = lb_FindY.Text;
+            tb_MasterT.Text = lb_FindT.Text;
+        }
+
+      
+
+    }
+}
